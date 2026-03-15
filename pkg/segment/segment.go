@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -86,4 +87,34 @@ func WriteRecord(s *Segment, r types.Record) error {
 	// update the size
 	s.size = s.size + int64(len(recordBytes))
 	return nil
+}
+
+func ReadRecords(s *Segment) ([]types.Record, error) {
+	s.file.Seek(28, io.SeekStart)
+
+	var records []types.Record
+
+	for {
+		var totalSize uint32
+		if err := binary.Read(s.file, binary.LittleEndian, &totalSize); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to read TotalSize: %w", err)
+		}
+		remaining := make([]byte, totalSize-4)
+		if _, err := io.ReadFull(s.file, remaining); err != nil {
+			return nil, fmt.Errorf("failed to read record body: %w", err)
+		}
+		sizeBuf := make([]byte, 4)
+		binary.LittleEndian.PutUint32(sizeBuf, totalSize)
+		fullRecord := append(sizeBuf, remaining...)
+
+		record, err := types.DeSerialize(fullRecord)
+		if err != nil {
+			break
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
