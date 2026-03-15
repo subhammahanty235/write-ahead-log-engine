@@ -43,13 +43,21 @@ func Serialize(r Record) ([]byte, error) {
 	if err := binary.Write(buf, binary.LittleEndian, checksum); err != nil {
 		return nil, fmt.Errorf("failed to write checksum: %w", err)
 	}
+	finalBuf := new(bytes.Buffer)
+	binary.Write(finalBuf, binary.LittleEndian, uint32(buf.Len()))
+	finalBuf.Write(buf.Bytes())
 
-	return buf.Bytes(), nil
+	return finalBuf.Bytes(), nil
 
 }
 
 func DeSerialize(data []byte) (Record, error) {
 	buf := bytes.NewReader(data)
+	var totalSize uint32
+
+	if err := binary.Read(buf, binary.LittleEndian, &totalSize); err != nil {
+		return Record{}, fmt.Errorf("failed to read TotalSize: %w", err)
+	}
 
 	var lsn LSN
 	if err := binary.Read(buf, binary.LittleEndian, &lsn); err != nil {
@@ -98,18 +106,20 @@ func DeSerialize(data []byte) (Record, error) {
 	if err := binary.Read(buf, binary.LittleEndian, &storedChecksum); err != nil {
 		return Record{}, fmt.Errorf("failed to read checksum: %w", err)
 	}
-	computedChecksum := crc32.ChecksumIEEE(data[:len(data)-4])
+
+	computedChecksum := crc32.ChecksumIEEE(data[4 : len(data)-4])
 	if computedChecksum != storedChecksum {
 		return Record{}, fmt.Errorf("checksum mismatch: data corrupt ho sakta hai")
 	}
 
 	return Record{
-		LSN:     lsn,
-		TxnID:   txnID,
-		Type:    rtype,
-		PageID:  pageID,
-		PrevLSN: prevLSN,
-		OldData: oldData,
-		NewData: newData,
+		LSN:       lsn,
+		TxnID:     txnID,
+		Type:      rtype,
+		PageID:    pageID,
+		PrevLSN:   prevLSN,
+		OldData:   oldData,
+		NewData:   newData,
+		TotalSize: totalSize,
 	}, nil
 }

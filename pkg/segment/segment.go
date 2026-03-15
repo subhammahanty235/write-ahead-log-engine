@@ -49,6 +49,9 @@ func CreateSegment(dir string, id uint64, firstLSN types.LSN) (*Segment, error) 
 	}
 
 	file, err := os.Create(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create segment file: %w", err)
+	}
 	if _, err := file.Write(headerBytes); err != nil {
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
@@ -60,4 +63,27 @@ func CreateSegment(dir string, id uint64, firstLSN types.LSN) (*Segment, error) 
 		maxSize: 64 * 1024 * 1024,
 	}, nil
 
+}
+
+func WriteRecord(s *Segment, r types.Record) error {
+	recordBytes, err := types.Serialize(r)
+	if err != nil {
+		return err
+	}
+
+	if int64(len(recordBytes))+s.size >= s.maxSize {
+		return fmt.Errorf("Record is exceeding the size")
+	}
+
+	file := s.file
+	if _, err := file.Write(recordBytes); err != nil {
+		return fmt.Errorf("failed to write record: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	// update the size
+	s.size = s.size + int64(len(recordBytes))
+	return nil
 }
