@@ -179,3 +179,7 @@ func OpenSegment(dir string, id uint64) (*Segment, error) {
 	}, nil
 
 }
+
+func CloseSegment(s *Segment) error {
+	return s.file.Close()
+}
