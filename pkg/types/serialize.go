@@ -44,7 +44,7 @@ func Serialize(r Record) ([]byte, error) {
 		return nil, fmt.Errorf("failed to write checksum: %w", err)
 	}
 	finalBuf := new(bytes.Buffer)
-	binary.Write(finalBuf, binary.LittleEndian, uint32(buf.Len()))
+	binary.Write(finalBuf, binary.LittleEndian, uint32(buf.Len())+4)
 	finalBuf.Write(buf.Bytes())
 
 	return finalBuf.Bytes(), nil

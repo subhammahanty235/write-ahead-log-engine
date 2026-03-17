@@ -133,6 +133,7 @@ func ReadRecords(s *Segment) ([]types.Record, error) {
 			}
 			return nil, fmt.Errorf("failed to read TotalSize: %w", err)
 		}
+		fmt.Printf("totalSize: %d\n", totalSize)
 		remaining := make([]byte, totalSize-4)
 		if _, err := io.ReadFull(s.file, remaining); err != nil {
 			return nil, fmt.Errorf("failed to read record body: %w", err)
@@ -143,7 +144,7 @@ func ReadRecords(s *Segment) ([]types.Record, error) {
 
 		record, err := types.DeSerialize(fullRecord)
 		if err != nil {
-			break
+			return nil, fmt.Errorf("deserialize fail hua: %w", err)
 		}
 		records = append(records, record)
 	}
