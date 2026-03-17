@@ -34,6 +34,37 @@ func serializeHeader(h SegmentHeader) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func deserializeHeader(data []byte) (SegmentHeader, error) {
+	buf := bytes.NewReader(data)
+
+	var version uint32
+	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+		return SegmentHeader{}, fmt.Errorf("failed to read Version: %w", err)
+	}
+
+	var segmentID uint64
+	if err := binary.Read(buf, binary.LittleEndian, &segmentID); err != nil {
+		return SegmentHeader{}, fmt.Errorf("failed to read SegmentID: %w", err)
+	}
+
+	var createdAt int64
+	if err := binary.Read(buf, binary.LittleEndian, &createdAt); err != nil {
+		return SegmentHeader{}, fmt.Errorf("failed to read CreatedAt: %w", err)
+	}
+
+	var firstLSN types.LSN
+	if err := binary.Read(buf, binary.LittleEndian, &firstLSN); err != nil {
+		return SegmentHeader{}, fmt.Errorf("failed to read FirstLSN: %w", err)
+	}
+
+	return SegmentHeader{
+		Version:   version,
+		SegmentID: segmentID,
+		CreatedAt: createdAt,
+		FirstLSN:  firstLSN,
+	}, nil
+}
+
 func CreateSegment(dir string, id uint64, firstLSN types.LSN) (*Segment, error) {
 	filename := fmt.Sprintf("%s/segment-%06d.wal", dir, id)
 
@@ -117,4 +148,34 @@ func ReadRecords(s *Segment) ([]types.Record, error) {
 		records = append(records, record)
 	}
 	return records, nil
+}
+
+func OpenSegment(dir string, id uint64) (*Segment, error) {
+	filename := fmt.Sprintf("%s/segment-%06d.wal", dir, id)
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open segment file: %w", err)
+	}
+
+	headerBytes := make([]byte, 28)
+	if _, err := io.ReadFull(file, headerBytes); err != nil {
+		return nil, fmt.Errorf("failed to read header: %w", err)
+	}
+	header, err := deserializeHeader(headerBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize header: %w", err)
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	return &Segment{
+		file:    file,
+		header:  header,
+		size:    stat.Size() - 28,
+		maxSize: 64 * 1024 * 1024,
+	}, nil
+
 }
