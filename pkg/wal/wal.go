@@ -155,3 +155,37 @@ func (w *WAL) Write(txnID types.TxnID, pageID types.PageID, oldData []byte, newD
 	return nil
 
 }
+
+func (w *WAL) Commit(txnID types.TxnID) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Step 2 — validate karo
+	txn, exists := w.activeTxns[txnID]
+	if !exists {
+		return fmt.Errorf("txn %d not found", txnID)
+	}
+	if txn.Status != TxnActive {
+		return fmt.Errorf("txn %d is not active (status: %d)", txnID, txn.Status)
+	}
+
+	rec := types.Record{
+		LSN:     w.nextLSN,
+		TxnID:   txnID,
+		Type:    types.RecordCommit,
+		PrevLSN: txn.LastLSN,
+	}
+	if err := segment.WriteRecord(w.currentSegment, rec); err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+
+	// sync
+	if err := segment.SyncSegment(w.currentSegment); err != nil {
+		return fmt.Errorf("sync failed: %w", err)
+	}
+	w.nextLSN++
+	txn.Status = TxnCommitted
+
+	return nil
+
+}
