@@ -179,6 +179,9 @@ func (w *WAL) Commit(txnID types.TxnID) error {
 		Type:    types.RecordCommit,
 		PrevLSN: txn.LastLSN,
 	}
+	if err := w.rotateIfNeeded(); err != nil {
+		return fmt.Errorf("rotate failed: %w", err)
+	}
 	if err := segment.WriteRecord(w.currentSegment, rec); err != nil {
 		return fmt.Errorf("write failed: %w", err)
 	}
@@ -213,6 +216,10 @@ func (w *WAL) Abort(txnID types.TxnID) error {
 		Type:    types.RecordAbort,
 		PrevLSN: txn.LastLSN,
 	}
+	if err := w.rotateIfNeeded(); err != nil {
+		return fmt.Errorf("rotate failed: %w", err)
+	}
+
 	if err := segment.WriteRecord(w.currentSegment, rec); err != nil {
 		return fmt.Errorf("write failed: %w", err)
 	}
