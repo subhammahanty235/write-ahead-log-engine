@@ -147,6 +147,10 @@ func (w *WAL) Write(txnID types.TxnID, pageID types.PageID, oldData []byte, newD
 		NewData: newData,
 	}
 
+	if err := w.rotateIfNeeded(); err != nil {
+		return fmt.Errorf("rotate failed: %w", err)
+	}
+
 	if err := segment.WriteRecord(w.currentSegment, rec); err != nil {
 		return fmt.Errorf("write failed: %w", err)
 	}
@@ -215,6 +219,27 @@ func (w *WAL) Abort(txnID types.TxnID) error {
 
 	w.nextLSN++
 	txn.Status = TxnAborted
+
+	return nil
+
+}
+
+func (w *WAL) rotateIfNeeded() error {
+	if !segment.IsFull(w.currentSegment) {
+		return nil
+	}
+
+	if err := segment.CloseSegment(w.currentSegment); err != nil {
+		return fmt.Errorf("segment close failed: %w", err)
+	}
+
+	newID := w.currentSegment.Header.SegmentID + 1
+	newSeg, err := segment.CreateSegment(w.config.Dir, newID, w.nextLSN)
+	if err != nil {
+		return fmt.Errorf("segment create failed: %w", err)
+	}
+	w.segments = append(w.segments, newSeg)
+	w.currentSegment = newSeg
 
 	return nil
 

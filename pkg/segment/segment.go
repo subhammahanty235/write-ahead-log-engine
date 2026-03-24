@@ -20,7 +20,7 @@ type SegmentHeader struct {
 
 type Segment struct {
 	file    *os.File
-	header  SegmentHeader
+	Header  SegmentHeader
 	size    int64
 	maxSize int64
 }
@@ -90,7 +90,7 @@ func CreateSegment(dir string, id uint64, firstLSN types.LSN) (*Segment, error) 
 
 	return &Segment{
 		file:    file,
-		header:  header,
+		Header:  header,
 		size:    0,
 		maxSize: 64 * 1024 * 1024,
 	}, nil
@@ -174,7 +174,7 @@ func OpenSegment(dir string, id uint64) (*Segment, error) {
 
 	return &Segment{
 		file:    file,
-		header:  header,
+		Header:  header,
 		size:    stat.Size() - 28,
 		maxSize: 64 * 1024 * 1024,
 	}, nil
@@ -187,4 +187,8 @@ func CloseSegment(s *Segment) error {
 
 func SyncSegment(s *Segment) error {
 	return s.file.Sync()
+}
+
+func IsFull(s *Segment) bool {
+	return s.size >= s.maxSize
 }
