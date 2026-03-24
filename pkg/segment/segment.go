@@ -184,3 +184,7 @@ func OpenSegment(dir string, id uint64) (*Segment, error) {
 func CloseSegment(s *Segment) error {
 	return s.file.Close()
 }
+
+func SyncSegment(s *Segment) error {
+	return s.file.Sync()
+}
