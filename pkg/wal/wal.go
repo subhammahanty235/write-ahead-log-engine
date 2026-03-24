@@ -16,6 +16,7 @@ type WAL struct {
 	currentSegment *segment.Segment
 	segments       []*segment.Segment
 	nextLSN        types.LSN
+	nextTxnID      uint64
 	activeTxns     map[types.TxnID]*TxnState
 	config         Config
 }
@@ -91,6 +92,66 @@ func Open(config Config) (*WAL, error) {
 		wal.segments = append(wal.segments, seg)
 		wal.currentSegment = seg
 		wal.nextLSN = 1
+		wal.nextTxnID = 1
 	}
 	return wal, nil
+}
+
+func (w *WAL) Begin() (types.TxnID, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	txnId := types.TxnID(w.nextTxnID)
+	w.nextTxnID++
+
+	rec := types.Record{
+		LSN:     w.nextLSN,
+		TxnID:   txnId,
+		Type:    types.RecordBegin,
+		PrevLSN: 0,
+	}
+	err := segment.WriteRecord(w.currentSegment, rec)
+	if err != nil {
+		return 0, err
+	}
+	w.nextLSN++
+	w.activeTxns[txnId] = &TxnState{
+		TxnID:   txnId,
+		Status:  TxnActive,
+		LastLSN: rec.LSN,
+	}
+	return txnId, nil
+}
+
+func (w *WAL) Write(txnID types.TxnID, pageID types.PageID, oldData []byte, newData []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// check if the txnid exists or not
+	txn, exists := w.activeTxns[txnID]
+	if !exists {
+		return fmt.Errorf("txn %d not found", txnID)
+	}
+	if txn.Status != TxnActive {
+		return fmt.Errorf("txn %d is not active (status: %d)", txnID, txn.Status)
+	}
+
+	// construct the record
+
+	rec := types.Record{
+		LSN:     w.nextLSN,
+		TxnID:   txnID,
+		Type:    types.RecordWrite,
+		PrevLSN: txn.LastLSN,
+		PageID:  pageID,
+		OldData: oldData,
+		NewData: newData,
+	}
+
+	if err := segment.WriteRecord(w.currentSegment, rec); err != nil {
+		return fmt.Errorf("write failed: %w", err)
+	}
+	w.nextLSN++
+	txn.LastLSN = rec.LSN
+	return nil
+
 }
