@@ -437,3 +437,15 @@ func (w *WAL) Truncate() error {
 	return nil
 
 }
+
+func (w *WAL) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	for _, seg := range w.segments {
+		if err := segment.CloseSegment(seg); err != nil {
+			return fmt.Errorf("segment close failed: %w", err)
+		}
+	}
+	return nil
+}
