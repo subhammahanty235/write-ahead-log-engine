@@ -251,3 +251,113 @@ func (w *WAL) rotateIfNeeded() error {
 	return nil
 
 }
+
+func (w *WAL) analyse() (commited map[types.TxnID]bool, uncommited map[types.TxnID]bool, err error) {
+	commited = make(map[types.TxnID]bool)
+	uncommited = make(map[types.TxnID]bool)
+
+	// step1 --> iterate though the compelte segments
+	for _, seg := range w.segments {
+		records, err := segment.ReadRecords(seg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("segment %d read failed: %w", seg.Header.SegmentID, err)
+		}
+
+		for _, rec := range records {
+			switch rec.Type {
+			case types.RecordBegin:
+				uncommited[rec.TxnID] = true
+			case types.RecordCommit:
+				commited[rec.TxnID] = true
+				delete(uncommited, rec.TxnID)
+
+			case types.RecordAbort:
+				delete(commited, rec.TxnID)
+				delete(uncommited, rec.TxnID)
+			}
+		}
+	}
+	return commited, uncommited, nil
+}
+
+type RecoveryCallbacks struct {
+	Redo func(pageID types.PageID, newData []byte) error
+	Undo func(pageID types.PageID, oldData []byte) error
+}
+
+func (w *WAL) redo(callbacks RecoveryCallbacks) error {
+	for _, seg := range w.segments {
+		records, err := segment.ReadRecords(seg)
+		if err != nil {
+			return fmt.Errorf("segment %d read failed: %w", seg.Header.SegmentID, err)
+		}
+
+		for _, rec := range records {
+			if rec.Type == types.RecordWrite {
+				if err := callbacks.Redo(rec.PageID, rec.NewData); err != nil {
+					return fmt.Errorf("redo failed txn %d page %d: %w", rec.TxnID, rec.PageID, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (w *WAL) undo(uncommitted map[types.TxnID]bool, callbacks RecoveryCallbacks) error {
+	var allRecords []types.Record
+
+	for _, seg := range w.segments {
+		records, err := segment.ReadRecords(seg)
+		if err != nil {
+			return fmt.Errorf("segment %d read failed: %w", seg.Header.SegmentID, err)
+		}
+		allRecords = append(allRecords, records...)
+	}
+
+	for i, j := 0, len(allRecords)-1; i < j; i, j = i+1, j-1 {
+		allRecords[i], allRecords[j] = allRecords[j], allRecords[i]
+	}
+
+	for _, rec := range allRecords {
+		if rec.Type == types.RecordWrite && uncommitted[rec.TxnID] {
+			if err := callbacks.Undo(rec.PageID, rec.OldData); err != nil {
+				return fmt.Errorf("undo failed txn %d page %d: %w", rec.TxnID, rec.PageID, err)
+			}
+			clr := types.Record{
+				LSN:     w.nextLSN,
+				TxnID:   rec.TxnID,
+				Type:    types.RecordCLR,
+				PageID:  rec.PageID,
+				PrevLSN: rec.LSN,
+			}
+			if err := segment.WriteRecord(w.currentSegment, clr); err != nil {
+				return fmt.Errorf("CLR write failed: %w", err)
+			}
+			w.nextLSN++
+
+		}
+	}
+
+	return nil
+}
+
+func (w *WAL) Recover(callbacks RecoveryCallbacks) error {
+	// Phase 1
+	_, uncommitted, err := w.analyse()
+	if err != nil {
+		return err
+	}
+
+	// Phase 2
+	if err := w.redo(callbacks); err != nil {
+		return err
+	}
+
+	// Phase 3
+	if err := w.undo(uncommitted, callbacks); err != nil {
+		return err
+	}
+
+	return nil
+}
