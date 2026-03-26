@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/subhammahanty235/wal-proj/pkg/segment"
-	"github.com/subhammahanty235/wal-proj/pkg/types"
+	"github.com/subhammahanty235/write-ahead-log-engine/pkg/segment"
+	"github.com/subhammahanty235/write-ahead-log-engine/pkg/types"
 )
 
 type WAL struct {

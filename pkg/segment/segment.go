@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	types "github.com/subhammahanty235/wal-proj/pkg/types"
+	types "github.com/subhammahanty235/write-ahead-log-engine/pkg/types"
 )
 
 type SegmentHeader struct {

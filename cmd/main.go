@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/subhammahanty235/wal-proj/pkg/types"
-	"github.com/subhammahanty235/wal-proj/pkg/wal"
+	"github.com/subhammahanty235/write-ahead-log-engine/pkg/types"
+	"github.com/subhammahanty235/write-ahead-log-engine/pkg/wal"
 )
 
 func main() {

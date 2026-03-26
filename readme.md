@@ -30,7 +30,7 @@ This is the same durability mechanism used inside PostgreSQL, RocksDB, etcd, and
 ## Installation
 
 ```bash
-go get github.com/subhammahanty235/wal-proj
+go get github.com/subhammahanty235/write-ahead-log-engine
 ```
 
 ---
@@ -38,7 +38,7 @@ go get github.com/subhammahanty235/wal-proj
 ## Usage
 
 ```go
-import "github.com/subhammahanty235/wal-proj/pkg/wal"
+import "github.com/subhammahanty235/write-ahead-log-engine/pkg/wal"
 
 // Open (or create) a WAL
 w, err := wal.Open(wal.Config{Dir: "/data/wal"})

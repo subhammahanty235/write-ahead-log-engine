@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/subhammahanty235/wal-proj/pkg/types"
+	"github.com/subhammahanty235/write-ahead-log-engine/pkg/types"
 )
 
 const testDir = "/tmp/wal-recovery-test"
