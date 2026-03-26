@@ -400,3 +400,40 @@ func (w *WAL) WriteCheckpoint() error {
 	}
 	return nil
 }
+
+func (w *WAL) Truncate() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	lastCheckpointSegIdx := -1
+	for i, seg := range w.segments {
+		records, err := segment.ReadRecords(seg)
+		if err != nil {
+			return fmt.Errorf("segment %d read failed: %w", seg.Header.SegmentID, err)
+		}
+
+		for _, rec := range records {
+			if rec.Type == types.RecordCheckpointEnd {
+				lastCheckpointSegIdx = i
+			}
+		}
+	}
+	if lastCheckpointSegIdx <= 0 {
+		return nil
+	}
+
+	for i := range lastCheckpointSegIdx {
+		seg := w.segments[i]
+		path := seg.Path()
+		if err := segment.CloseSegment(seg); err != nil {
+			return fmt.Errorf("segment %d close failed: %w", seg.Header.SegmentID, err)
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("segment %d delete failed: %w", seg.Header.SegmentID, err)
+		}
+	}
+
+	w.segments = w.segments[lastCheckpointSegIdx:]
+	return nil
+
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	types "github.com/subhammahanty235/wal-proj/pkg/types"
@@ -23,6 +24,7 @@ type Segment struct {
 	Header  SegmentHeader
 	size    int64
 	maxSize int64
+	dir     string
 }
 
 func serializeHeader(h SegmentHeader) ([]byte, error) {
@@ -93,6 +95,7 @@ func CreateSegment(dir string, id uint64, firstLSN types.LSN) (*Segment, error) 
 		Header:  header,
 		size:    0,
 		maxSize: 64 * 1024 * 1024,
+		dir:     dir,
 	}, nil
 
 }
@@ -153,7 +156,7 @@ func ReadRecords(s *Segment) ([]types.Record, error) {
 
 func OpenSegment(dir string, id uint64) (*Segment, error) {
 	filename := fmt.Sprintf("%s/segment-%06d.wal", dir, id)
-	file, err := os.Open(filename)
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open segment file: %w", err)
 	}
@@ -177,6 +180,7 @@ func OpenSegment(dir string, id uint64) (*Segment, error) {
 		Header:  header,
 		size:    stat.Size() - 28,
 		maxSize: 64 * 1024 * 1024,
+		dir:     dir,
 	}, nil
 
 }
@@ -191,4 +195,8 @@ func SyncSegment(s *Segment) error {
 
 func IsFull(s *Segment) bool {
 	return s.size >= s.maxSize
+}
+
+func (s *Segment) Path() string {
+	return filepath.Join(s.dir, fmt.Sprintf("segment-%06d.wal", s.Header.SegmentID))
 }
