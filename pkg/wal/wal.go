@@ -361,3 +361,42 @@ func (w *WAL) Recover(callbacks RecoveryCallbacks) error {
 
 	return nil
 }
+
+func (w *WAL) WriteCheckpoint() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	beginRec := types.Record{
+		LSN:  w.nextLSN,
+		Type: types.RecordCheckpointBegin,
+	}
+
+	if err := segment.WriteRecord(w.currentSegment, beginRec); err != nil {
+		return fmt.Errorf("checkpoint begin write failed: %w", err)
+	}
+	w.nextLSN++
+	activeTxns := make([]types.TxnID, 0, len(w.activeTxns))
+	for txnID := range w.activeTxns {
+		activeTxns = append(activeTxns, txnID)
+	}
+
+	cd := types.CheckpointData{ActiveTxns: activeTxns}
+	cdBytes, err := types.SerializeCheckpointData(cd)
+	if err != nil {
+		return fmt.Errorf("checkpoint data serialize failed: %w", err)
+	}
+
+	endRec := types.Record{
+		LSN:     w.nextLSN,
+		Type:    types.RecordCheckpointEnd,
+		NewData: cdBytes,
+	}
+	if err := segment.WriteRecord(w.currentSegment, endRec); err != nil {
+		return fmt.Errorf("checkpoint end write failed: %w", err)
+	}
+	w.nextLSN++
+
+	if err := segment.SyncSegment(w.currentSegment); err != nil {
+		return fmt.Errorf("checkpoint sync failed: %w", err)
+	}
+	return nil
+}
